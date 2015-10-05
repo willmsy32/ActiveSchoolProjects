@@ -35,110 +35,113 @@ NOTE: Please don't use any other directory/CSE servers to run your code.
 */
 
 
-
-
-
-#define _GNU_SOURCE     /* To get defns of NI_MAXSERV and NI_MAXHOST */
+#define _GNU_SOURCE     // To get defnitions of NI_MAXSERV and NI_MAXHOST
+#include <arpa/inet.h>
+#include <linux/if_link.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <ifaddrs.h>
-#include <arpa/inet.h>
 #include <sys/socket.h>
-#include <netdb.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <linux/if_link.h>
 
-
+void initializeProcess(int argc, char *argv[]);
 char *substringOf(int i,int j,char *ch);
+void *get_in_addr(struct sockaddr *sa);
 char *localIP();
 void handleDisplayRequest();
 
-int main(int argc, char *argv[])
-{
-    int i=0,j=2;
-    char str[]="String";
-    char *test;
 
-    test=substringOf(i,j,str);
-    printf("%s\n",test);
+/* DEFINITIONS AND GLOBALS ========================================================================
 
+
+*/
+//Define the boolean data type
+typedef int bool;
+#define true 1
+#define false 0
+
+//Define the standard input file descriptor number
+#define std_in 0 
+
+//Define the port for the process to listen on
+int listenPort = -1;
+
+//Define whether the process will act as a server or as a client
+bool isServer = false;
+
+//Used to check the return values for functions and return their error messages
+int returnValue = 0;
+
+
+
+
+/* PRIMARY FUNCTIONS ==============================================================================
+
+*/
+int main(int argc, char *argv[]){
+	initializeProcess(argc,argv);
 	handleDisplayRequest();
+	
     return 0;
 }
 
-// Grab the substring from character i to character j of the string *ch
-char *substringOf(int i,int j,char *ch)
-{
-    int n,k=0;
-    char *ch1;
-    ch1=(char*)malloc((j-i+1)*1);
-    n=j-i+1;
+/*Initializes the process
+- Sets the process as either a server or client
+- Sets the process' listening port
 
-    while(k<n)
-    {
-        ch1[k]=ch[i];
-        i++;k++;
-    }
-
-    return (char *)ch1;
+*/
+void initializeProcess(int argc, char *argv[]){
+	if( argc != 3){
+		printf("This program requires two command line arguments to initialize!\n");
+		printf("You must specify whether the process is a server or a client using 'c' and 's' as your first parameter\n");
+		printf("You must specify what port the process should listen on as you second parameter\n");
+	}
+	else{
+		//If this client has been designated as a server
+		if(strcmp(argv[1],"s")==0){
+			printf("This process has been designated as a server\n");
+			isServer = true;
+		//If this client has been designated as a client
+		}else if (strcmp(argv[1],"c")==0){
+			printf("This process has been designated as a client\n");
+			isServer = false;
+		//If it cannot be determined if the process is a client or a server
+		}else{
+			printf("Invalid designation of process role- Please specify if process is a server or client with first parameter\n");
+			exit(-1);
+		}
+		
+		//Grab the second parameter as a integer
+		listenPort = atoi(argv[2]);
+		if(listenPort==-1){
+			printf("Invalid designation of process port- Please specify a port for the process to listen on\n");
+			exit(-1);
+		}
+		printf("Process will listen in on port %d\n",listenPort);
+	}
 }
 
-// Determines the local IP address of the current process
-char *localIP(){
-		
-	struct ifaddrs *ifaddr, *ifa;
-	int family, s, n;
-	char host[NI_MAXHOST];
-	char *myIP = malloc (sizeof(char)*NI_MAXHOST);
-
-	if (getifaddrs(&ifaddr) == -1) {
-		perror("getifaddrs");
-		exit(EXIT_FAILURE);
-	}
-	/* Walk through linked list, maintaining head pointer so we can free list later */
-	
-	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
-		if (ifa->ifa_addr == NULL){
-			continue;
-		}
-
-		family = ifa->ifa_addr->sa_family;
-		
-		if (family == AF_INET) {
-			s = getnameinfo(ifa->ifa_addr,(family == AF_INET) ? sizeof(struct sockaddr_in) :sizeof(struct sockaddr_in6),host, NI_MAXHOST,NULL, 0, NI_NUMERICHOST);
-			if (s != 0) {
-				printf("getnameinfo() failed: %s\n", gai_strerror(s));
-				exit(EXIT_FAILURE);
-			}
-			if(strcmp("127.0.0.1",host)!=0){
-				//printf("My address is <%s>\n",host);
-				strcpy(myIP,host);
-			}
-		}
-	}
-	freeifaddrs(ifaddr);
-	return myIP;
-}
-
-/*
+/* HELP
 1. HELP: Display information about the available user command options.
 */
 void handleHelpRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* DISPLAY
 2. DISPLAY: Display your (the students) full name, your UBIT name and UB email address, the IP
 address of this process, and the port on which this process is listening for incoming connections.
 NOTE: The IP should not be your “Lo” address (127.0.0.1). It should be the actual IP of the host.
 */
 void handleDisplayRequest(){
-	printf("Andrew S. Willms (aswillms)\naswillms@buffalo.edu\nLocal Process IP:   <%s>\nLocal Process Port: %d\n",localIP(),0);
+	printf("Andrew S. Willms (aswillms)\naswillms@buffalo.edu\nLocal Process IP:   <%s>\nLocal Process Port: %d\n",localIP(),listenPort);
 }
 
-/*
+/* REGISTER
 4. REGISTER <server IP> <port no>: This command is used by the client to register itself with the
 server and to get the IP and listening port numbers of all other peers currently registered with the
 server. The first task of every host is to register itself with the server by sending the server a TCP
@@ -159,7 +162,7 @@ void handleRegisterRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* CONNECT
 4. CONNECT <destination> <port no>: This command is used to establish a connection between two
 registered clients. The command establishes a new TCP connection to the specified <destination> at
 the specified <port no>. The <destination> can either be an IP address or a hostname. (e.g., CONNECT
@@ -175,7 +178,7 @@ void handleConnectRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* LIST
 5. LIST: Display a numbered list of all the connections this process is part of. This numbered list
 will include connections initiated by this process and connections initiated by other processes. The
 output should display the hostname, IP address and the listening port of all the peers the process is
@@ -195,7 +198,7 @@ void handleListRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* TERMINATE
 6. TERMINATE <connection id> This command will terminate the connection listed under the
 specified number when LIST is used to display all connections. E.g., TERMINATE 2. In this
 example, the connection with highgate should end. An error message is displayed if a valid
@@ -206,7 +209,7 @@ void handleTerminateRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* QUIT
 7. QUIT Close all connections and terminate this process. When a host exits, the server unregisters the
 host and sends the updated “Server-IP-List” to all the clients. Other hosts on receiving the updated list
 from the server should display the updated list
@@ -215,7 +218,7 @@ void handleQuitRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
+/* SEND
 8. SEND <connection id. > <message>: (Eg., send 3 Oh! This project is a piece of cake). This will
 send the message to the host on the connection that is designated by the number 3 when LIST
 command is used. The message to be sent can be up-to 100 characters long, including blank spaces.
@@ -239,8 +242,77 @@ void handleSendRequest(){
 	printf("Function unimplemented!\n");
 }
 
-/*
-References:
+
+
+/* SECONDARY FUNCTIONS ============================================================================
+
+*/
+// Determines the local IP address of the current process
+char *localIP(){
+	struct ifaddrs *ifaddr, *ifa;
+	int family, s, n;
+	char host[NI_MAXHOST];
+	char *myIP = malloc (sizeof(char)*NI_MAXHOST);
+
+	if (getifaddrs(&ifaddr) == -1) {
+		perror("getifaddrs");
+		exit(EXIT_FAILURE);
+	}
+	
+	/* Walk through linked list, maintaining head pointer so we can free list later */
+	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+		if (ifa->ifa_addr == NULL){
+			continue;
+		}
+
+		family = ifa->ifa_addr->sa_family;
+		
+		if (family == AF_INET) {
+			s = getnameinfo(ifa->ifa_addr,(family == AF_INET) ? sizeof(struct sockaddr_in) :sizeof(struct sockaddr_in6),host, NI_MAXHOST,NULL, 0, NI_NUMERICHOST);
+			if (s != 0) {
+				printf("getnameinfo() failed: %s\n", gai_strerror(s));
+				exit(EXIT_FAILURE);
+			}
+			if(strcmp("127.0.0.1",host)!=0){
+				//printf("My address is <%s>\n",host);
+				strcpy(myIP,host);
+			}
+		}
+	}
+	freeifaddrs(ifaddr);
+	
+	return myIP;
+}
+
+// Grab the substring from character i to character j of the string *ch
+char *substringOf(int i,int j,char *ch){
+    int n,k=0;
+    char *ch1;
+    ch1=(char*)malloc((j-i+1)*1);
+    n=j-i+1;
+
+    while(k<n)
+    {
+        ch1[k]=ch[i];
+        i++;k++;
+    }
+
+    return (char *)ch1;
+}
+
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa){
+	if (sa->sa_family == AF_INET) {
+		return &(((struct sockaddr_in*)sa)->sin_addr);
+	}
+
+	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+
+
+
+/* References =====================================================================================
 http://man7.org/linux/man-pages/man3/getifaddrs.3.html
 https://stackoverflow.com/questions/16443780/how-to-return-a-char-array-from-a-function-in-c
 http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html#select
